@@ -2,6 +2,7 @@ package org.s7mple.regexfilter;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -12,11 +13,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.regex.Pattern;
 
 public class RegexFilter extends JavaPlugin implements Listener {
@@ -98,21 +101,51 @@ public class RegexFilter extends JavaPlugin implements Listener {
     }
 
     private void handlePlayerInventoryItem(ItemStack itemStack, Player player) {
-        String itemName = itemStack.getType().toString();
-        String itemDisplayName = itemStack.getItemMeta() != null && itemStack.getItemMeta().hasDisplayName()
-                ? itemStack.getItemMeta().getDisplayName()
-                : "";
+        if (itemStack.getType() == Material.WRITABLE_BOOK || itemStack.getType() == Material.WRITTEN_BOOK) {
+            BookMeta bookMeta = (BookMeta) itemStack.getItemMeta();
+            if (bookMeta != null && bookMeta.hasPages()) {
+                if (player.hasPermission("regexfilter.book")) {
+                    return;
+                }
 
-        String fullItemName = itemName + " " + itemDisplayName;
+                List<String> pages = new ArrayList<>(bookMeta.getPages());
+                boolean modified = false;
 
-        for (String triggeredKey : config.getKeys(true)) {
-            if (config.getBoolean(triggeredKey + ".Enabled") && isMatchingRegex(fullItemName, config.getString(triggeredKey + ".Regex"))) {
-                Bukkit.getScheduler().runTask(this, () -> {
-                    itemStack.setAmount(0);
+                for (int i = 0; i < pages.size(); i++) {
+                    String pageContent = pages.get(i);
+                    for (String triggeredKey : config.getKeys(true)) {
+                        if (config.getBoolean(triggeredKey + ".Enabled") && isMatchingRegex(pageContent, config.getString(triggeredKey + ".Regex"))) {
+                            pages.set(i, pageContent.replaceAll(config.getString(triggeredKey + ".Regex"), ""));
+                            modified = true;
+                            handleAction(player, triggeredKey, itemStack);
+                            break;
+                        }
+                    }
+                }
+
+                if (modified) {
+                    bookMeta.setPages(pages);
+                    itemStack.setItemMeta(bookMeta);
                     player.updateInventory();
-                });
-                handleAction(player, triggeredKey, itemStack);
-                return;
+                }
+            }
+        } else {
+            String itemName = itemStack.getType().toString();
+            String itemDisplayName = itemStack.getItemMeta() != null && itemStack.getItemMeta().hasDisplayName()
+                    ? itemStack.getItemMeta().getDisplayName()
+                    : "";
+
+            String fullItemName = itemName + " " + itemDisplayName;
+
+            for (String triggeredKey : config.getKeys(true)) {
+                if (config.getBoolean(triggeredKey + ".Enabled") && isMatchingRegex(fullItemName, config.getString(triggeredKey + ".Regex"))) {
+                    Bukkit.getScheduler().runTask(this, () -> {
+                        itemStack.setAmount(0);
+                        player.updateInventory();
+                    });
+                    handleAction(player, triggeredKey, itemStack);
+                    return;
+                }
             }
         }
     }
