@@ -1,0 +1,9 @@
+name: RegexFilter
+version: '1.0'
+main: org.s7mple.regexfilter.RegexFilter
+api-version: '1.20'
+commands:
+  regexfilter:
+    description: Reload the filter.yml
+    usage: /regexfilter reload
+    permission: regexfilter.reload
